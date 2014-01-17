@@ -1,4 +1,4 @@
-.toggle-slide:not(.toggle-disabled) {
+.toggle-slide {
   overflow: hidden;
   cursor: pointer;
   -webkit-touch-callout: none;
