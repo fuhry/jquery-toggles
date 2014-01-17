@@ -27,6 +27,7 @@ $.fn['toggles'] = function(options) {
       options = $.extend(options, { disabled: disabled, on: checked, checkbox: this });
       
       $(container).toggles(options);
+      $el.hide();
     });
   }
   
@@ -73,7 +74,6 @@ $.fn['toggles'] = function(options) {
 
   // this is the actual toggle function which does the toggling
   var setSliderState = function(slide, width, height, new_state) {
-    console.debug('setSliderState(', new_state, ')');
     // do nothing if new_state === current_state
     var current_state = slide.hasClass('active');
     if (new_state === current_state) return;
@@ -100,11 +100,12 @@ $.fn['toggles'] = function(options) {
   };
   
   var setCheckboxState = function(checkbox, state) {
-    console.debug('setCheckboxState(', state, ')');
     (checkbox.get(0)).checked = !!state;
+    checkbox.triggerHandler('change');
   };
   
   var setDisabled = function(slide, checkbox, state) {
+    console.debug('setDisabled', state);
     state ? slide.addClass('toggle-disabled') : slide.removeClass('toggle-disabled');
     (checkbox.get(0)).disabled = !!state;
   }
@@ -196,13 +197,6 @@ $.fn['toggles'] = function(options) {
     toggle.html(slide.html(inner.append(on,blob,off)))
       .addClass('toggle-' + opts['theme']);
 
-    // when toggle is fired, toggle the toggle
-    slide.on('toggle', function(e,active) {
-      if (e) e.stopPropagation();
-      
-      
-    });
-
     // setup events for toggling on or off
     toggle.on('toggleOn', function() {
       setSliderState(slide, width, height, true);
@@ -236,11 +230,11 @@ $.fn['toggles'] = function(options) {
     }
     
     if ( typeof(checkbox) == 'object' ) {
-      checkbox.on('change', function(event) {
+      checkbox.on('toggleChange click', function(event) {
           var state = getState(slide, checkbox);
           setSliderState(slide, width, height, state);
         })
-        .on('disable', function(event) {
+        .on('toggleDisable', function(event) {
             var state = !!(checkbox.get(0)).disabled;
             setDisabled(slide, checkbox, state);
         });
@@ -273,7 +267,6 @@ $.fn['toggles'] = function(options) {
       if (old_state) {
         // if the movement enough to toggle?
         if (diff < -slideLimit) {
-          console.debug('slid to "off"');
           setSliderState(slide, width, height, false);
           setCheckboxState(checkbox, false);
         } else {
@@ -287,7 +280,6 @@ $.fn['toggles'] = function(options) {
 
         // inactive
         if (diff > slideLimit) {
-          console.debug('slid to "off"');
           setSliderState(slide, width, height, true);
           setCheckboxState(checkbox, true);
         } else {
@@ -357,9 +349,8 @@ $.propHooks.checked = {
     // set the attribute, then fire the event.
     element[attribute] = !!value;
     
-    console.debug('prophook checked');
-
     $(element).triggerHandler('change', !!value);
+    $(element).triggerHandler('toggleChange', !!value);
 
     return !!value;
   }
@@ -376,6 +367,7 @@ $.propHooks.disabled = {
     element[attribute] = !!value;
 
     $(element).triggerHandler('disable', !!value);
+    $(element).triggerHandler('toggleDisable', !!value);
 
     return !!value;
   }
