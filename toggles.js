@@ -3,9 +3,35 @@
 Copyright 2013 Simon Tabor - MIT License
 https://github.com/simontabor/jquery-toggles / http://simontabor.com/labs/toggles
 */
-$.fn['toggles'] = function(options) {
-  options = options || {};
+(function($) {
 
+$.fn['toggles'] = function(options) {
+
+  // if you call .toggles() on a checkbox, the checkbox is converted to a toggle,
+  // and the original checkbox is hidden.
+  if ( $(this).is(':checkbox') ) {
+    // Older browsers would only transfer a variable into the scope of
+    // anonymous functions if you "touched" the variable somehow.
+    // This may or not still be necessary in 2014, but I still do it.
+    void(options);
+    return this.each(function() {
+
+      var container = $('<div />'),
+          $el = $(this),
+          checked = $el.prop('checked'),
+          disabled = $el.prop('disabled');
+          
+      container.insertAfter(this);
+      
+      options = options || {};
+      options = $.extend(options, { disabled: disabled, on: checked, checkbox: this });
+      
+      $(container).toggles(options);
+    });
+  }
+  
+  options = options || {};
+  
   // extend default opts with the users options
   var opts = $.extend({
     'drag': true, // can the toggle be dragged
@@ -15,21 +41,20 @@ $.fn['toggles'] = function(options) {
       'off': 'OFF' // and off
     },
     'on': false, // is the toggle ON on init
+    'disabled': false, // is the toggle grayed out and unable to be clicked
     'animate': 250, // animation time
     'transition': 'ease-in-out', // animation transition,
     'checkbox': null, // the checkbox to toggle (for use in forms)
-    'clicker': null, // element that can be clicked on to toggle. removes binding from the toggle itself (use nesting)
     'width': 50, // width used if not set in css
     'height': 20, // height if not set in css
-    'type': 'compact' // defaults to a compact toggle, other option is 'select' where both options are shown at once
+    'type': 'compact', // defaults to a compact toggle, other option is 'select' where both options are shown at once
+    'theme': 'light'
   },options);
 
   var selectType = (opts['type'] == 'select');
 
   // ensure these are jquery elements
   opts['checkbox'] = $(opts['checkbox']); // doesnt matter for checkbox
-
-  if (opts['clicker']) opts['clicker'] = $(opts['clicker']); // leave as null if not set
 
   // use native transitions if possible
   var transition = 'margin-left '+opts['animate']+'ms '+opts['transition'];
@@ -47,22 +72,22 @@ $.fn['toggles'] = function(options) {
   };
 
   // this is the actual toggle function which does the toggling
-  var doToggle = function(slide, width, height, state) {
-    var active = slide.toggleClass('active').hasClass('active');
+  var setSliderState = function(slide, width, height, new_state) {
+    console.debug('setSliderState(', new_state, ')');
+    // do nothing if new_state === current_state
+    var current_state = slide.hasClass('active');
+    if (new_state === current_state) return;
 
-    if (state === active) return;
+    slide.toggleClass('active');
 
     var inner = slide.find('.toggle-inner').css(transitions);
 
     slide.find('.toggle-off').toggleClass('active');
     slide.find('.toggle-on').toggleClass('active');
 
-    // toggle the checkbox, if there is one
-    opts['checkbox'].prop('checked',active);
-
     if (selectType) return;
 
-    var margin = active ? 0 : -width + height;
+    var margin = new_state ? 0 : -width + height;
 
     // move the toggle!
     inner.css('margin-left',margin);
@@ -72,7 +97,34 @@ $.fn['toggles'] = function(options) {
       inner.css(notransitions);
       inner.css('margin-left',margin);
     },opts['animate']);
-
+  };
+  
+  var setCheckboxState = function(checkbox, state) {
+    console.debug('setCheckboxState(', state, ')');
+    (checkbox.get(0)).checked = !!state;
+  };
+  
+  var setDisabled = function(slide, checkbox, state) {
+    state ? slide.addClass('toggle-disabled') : slide.removeClass('toggle-disabled');
+    (checkbox.get(0)).disabled = !!state;
+  }
+  
+  var getState = function(slide, checkbox) {
+    if ( typeof(checkbox) == 'object' ) {
+      return !!checkbox.attr('checked');
+    }
+    else {
+      return slide.hasClass('active');
+    }
+  };
+  
+  var isDisabled = function(slide, checkbox) {
+    if ( typeof(checkbox) == 'object' ) {
+      return !!checkbox.attr('disabled');
+    }
+    else {
+      return slide.hasClass('toggle-disabled');
+    }
   };
 
   // start setting up the toggle(s)
@@ -94,6 +146,8 @@ $.fn['toggles'] = function(options) {
     var on = $(div+'on">'); // the on div
     var off = $(div+'off">'); // off div
     var blob = $(div+'blob">'); // the grip toggle blob
+    
+    var checkbox = opts['checkbox'];
 
     var halfheight = height/2;
     var onoffwidth = width - halfheight;
@@ -139,50 +193,57 @@ $.fn['toggles'] = function(options) {
     }
 
     // construct the toggle
-    toggle.html(slide.html(inner.append(on,blob,off)));
+    toggle.html(slide.html(inner.append(on,blob,off)))
+      .addClass('toggle-' + opts['theme']);
 
     // when toggle is fired, toggle the toggle
     slide.on('toggle', function(e,active) {
-
-      // stop bubbling
       if (e) e.stopPropagation();
-
-      doToggle(slide,width,height);
-      toggle.trigger('toggle',!active);
+      
+      
     });
 
     // setup events for toggling on or off
     toggle.on('toggleOn', function() {
-      doToggle(slide, width, height, false);
+      setSliderState(slide, width, height, true);
     });
     toggle.on('toggleOff', function() {
-      doToggle(slide, width, height, true);
+      setSliderState(slide, width, height, false);
     });
 
     if (opts['on']) {
-
       // toggle immediately to turn the toggle on
-      doToggle(slide,width,height);
+      setSliderState(slide,width,height,true);
+    }
+    if (opts['disabled']) {
+      setDisabled(slide, checkbox, true);
     }
 
-    // if click is enabled and toggle isn't within the clicker element (stops double binding)
-    if (opts['click'] && (!opts['clicker'] || !opts['clicker'].has(toggle).length)) {
+    // if click is enabled
+    if (opts['click']) {
 
       // bind the click, ensuring its not the blob being clicked on
       toggle.on('click',function(e) {
-        if (e.target !=  blob[0] || !opts['drag']) {
-          slide.trigger('toggle', slide.hasClass('active'));
-        }
-      });
+        if ( isDisabled(slide, checkbox) ) return;
+        
+        e.stopPropagation();
+        e.preventDefault();
+        
+        var state = getState(slide, checkbox);
+        setSliderState(slide, width, height, !state);
+        setCheckboxState(checkbox, !state);
+      }).data('toggle-opts', opts);
     }
-
-    // setup the clicker element
-    if (opts['clicker']) {
-      opts['clicker'].on('click',function(e) {
-        if (e.target !=  blob[0] || !opts['drag']) {
-          slide.trigger('toggle', slide.hasClass('active'));
-        }
-      });
+    
+    if ( typeof(checkbox) == 'object' ) {
+      checkbox.on('change', function(event) {
+          var state = getState(slide, checkbox);
+          setSliderState(slide, width, height, state);
+        })
+        .on('disable', function(event) {
+            var state = !!(checkbox.get(0)).disabled;
+            setDisabled(slide, checkbox, state);
+        });
     }
 
     // we're done with all the non dragging stuff
@@ -198,20 +259,23 @@ $.fn['toggles'] = function(options) {
       slide.off('mouseleave');
       blob.off('mouseup');
 
-      var active = slide.hasClass('active');
+      var old_state = getState(slide, checkbox);
 
       if (!diff && opts.click && e.type !== 'mouseleave') {
 
         // theres no diff so nothing has moved. only toggle if its a mouseup
-        slide.trigger('toggle', active);
+        //var state = getState(slide, checkbox);
+        //setSliderState(slide, width, height, !state);
+        //setCheckboxState(checkbox, !state);
         return;
       }
 
-      if (active) {
-
+      if (old_state) {
         // if the movement enough to toggle?
         if (diff < -slideLimit) {
-          slide.trigger('toggle',active);
+          console.debug('slid to "off"');
+          setSliderState(slide, width, height, false);
+          setCheckboxState(checkbox, false);
         } else {
 
           // go back
@@ -223,7 +287,9 @@ $.fn['toggles'] = function(options) {
 
         // inactive
         if (diff > slideLimit) {
-          slide.trigger('toggle',active);
+          console.debug('slid to "off"');
+          setSliderState(slide, width, height, true);
+          setCheckboxState(checkbox, true);
         } else {
 
           // go back again
@@ -238,6 +304,8 @@ $.fn['toggles'] = function(options) {
     var wh = -width + height;
 
     blob.on('mousedown', function(e) {
+
+      if ( isDisabled(slide, checkbox) ) return;
 
       // reset diff
       diff = 0;
@@ -276,3 +344,41 @@ $.fn['toggles'] = function(options) {
   });
 
 };
+
+// our jQuery hooks to fire events when a checkbox is
+// disabled or enabled
+$.propHooks.checked = {
+  set: function(element, value, attribute) {
+
+    // do not fire the event if the property is unchanged
+    if ( (!!element[attribute]) === !!value )
+      return;
+    
+    // set the attribute, then fire the event.
+    element[attribute] = !!value;
+    
+    console.debug('prophook checked');
+
+    $(element).triggerHandler('change', !!value);
+
+    return !!value;
+  }
+};
+
+$.propHooks.disabled = {
+  set: function(element, value, attribute) {
+
+    // do not fire the event if the property is unchanged
+    if ( (!!element[attribute]) === !!value )
+      return;
+    
+    // set the attribute, then fire the event.
+    element[attribute] = !!value;
+
+    $(element).triggerHandler('disable', !!value);
+
+    return !!value;
+  }
+};
+
+})(jQuery);

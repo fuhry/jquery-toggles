@@ -1,4 +1,4 @@
-.toggle-slide {
+.toggle-slide:not(.toggle-disabled) {
   overflow: hidden;
   cursor: pointer;
   -webkit-touch-callout: none;
@@ -19,4 +19,14 @@
   cursor: grab;
   cursor: -moz-grab;
   cursor: -webkit-grab;
+}
+
+.toggle-disabled {
+	opacity: 0.5;
+	filter: alpha(opacity=50);
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=50)";
+}
+
+.toggle-slide.toggle-disabled, .toggle-slide.toggle-disabled .toggle-blob {
+	cursor: not-allowed;
 }
